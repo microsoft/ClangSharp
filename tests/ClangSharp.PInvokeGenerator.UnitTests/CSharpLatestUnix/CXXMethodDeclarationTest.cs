@@ -93,6 +93,86 @@ namespace ClangSharp.UnitTests
             return ValidateGeneratedCSharpLatestUnixBindingsAsync(inputContents, expectedOutputContents);
         }
 
+        public override Task ConstructorImportTest()
+        {
+            var inputContents = @"struct MyStruct
+{
+    MyStruct();
+    MyStruct(int a);
+};
+";
+
+            var entryPoint1 = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                ? (Environment.Is64BitProcess ? "??0MyStruct@@QEAA@XZ" : "??0MyStruct@@QAE@XZ")
+                : "_ZN8MyStructC1Ev";
+            var entryPoint2 = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                ? (Environment.Is64BitProcess ? "??0MyStruct@@QEAA@H@Z" : "??0MyStruct@@QAE@H@Z")
+                : "_ZN8MyStructC1Ei";
+
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                entryPoint1 = $"_{entryPoint1}";
+                entryPoint2 = $"_{entryPoint2}";
+            }
+
+            var expectedOutputContents = $@"using System.Runtime.InteropServices;
+
+namespace ClangSharp.Test
+{{
+    public partial struct MyStruct
+    {{
+        [DllImport(""ClangSharpPInvokeGenerator"", CallingConvention = CallingConvention.ThisCall, EntryPoint = ""{entryPoint1}"", ExactSpelling = true)]
+        public static extern unsafe void Constructor(MyStruct* pThis);
+
+        [DllImport(""ClangSharpPInvokeGenerator"", CallingConvention = CallingConvention.ThisCall, EntryPoint = ""{entryPoint2}"", ExactSpelling = true)]
+        public static extern unsafe void Constructor(MyStruct* pThis, int a);
+    }}
+}}
+";
+
+            return ValidateGeneratedCSharpLatestUnixBindingsAsync(inputContents, expectedOutputContents);
+        }
+
+        public override Task CopyAndMoveConstructor()
+        {
+            var inputContents = @"struct MyStruct
+{
+    MyStruct(const MyStruct& other);
+    MyStruct(MyStruct&& other);
+};
+";
+
+            var entryPoint1 = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                ? (Environment.Is64BitProcess ? "??0MyStruct@@QEAA@AEBU0@@Z" : "??0MyStruct@@QAE@ABU0@@Z")
+                : "_ZN8MyStructC1ERKS_";
+            var entryPoint2 = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                ? (Environment.Is64BitProcess ? "??0MyStruct@@QEAA@$$QEAU0@@Z" : "??0MyStruct@@QAE@$$QAU0@@Z")
+                : "_ZN8MyStructC1EOS_";
+
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                entryPoint1 = $"_{entryPoint1}";
+                entryPoint2 = $"_{entryPoint2}";
+            }
+
+            var expectedOutputContents = $@"using System.Runtime.InteropServices;
+
+namespace ClangSharp.Test
+{{
+    public partial struct MyStruct
+    {{
+        [DllImport(""ClangSharpPInvokeGenerator"", CallingConvention = CallingConvention.ThisCall, EntryPoint = ""{entryPoint1}"", ExactSpelling = true)]
+        public static extern unsafe void CopyConstructor(MyStruct* pThis, [NativeTypeName(""const MyStruct &"")] MyStruct* other);
+
+        [DllImport(""ClangSharpPInvokeGenerator"", CallingConvention = CallingConvention.ThisCall, EntryPoint = ""{entryPoint2}"", ExactSpelling = true)]
+        public static extern unsafe void MoveConstructor(MyStruct* pThis, [NativeTypeName(""MyStruct &&"")] MyStruct* other);
+    }}
+}}
+";
+
+            return ValidateGeneratedCSharpLatestUnixBindingsAsync(inputContents, expectedOutputContents);
+        }
+
         public override Task ConversionTest()
         {
             var inputContents = @"struct MyStruct
@@ -185,7 +265,7 @@ namespace ClangSharp.Test
     public partial struct MyStruct
     {{
         [DllImport(""ClangSharpPInvokeGenerator"", CallingConvention = CallingConvention.ThisCall, EntryPoint = ""{entryPoint}"", ExactSpelling = true)]
-        public static extern void MyVoidMethod();
+        public static extern unsafe void MyVoidMethod(MyStruct* pThis);
 
         public int MyInt32Method()
         {{

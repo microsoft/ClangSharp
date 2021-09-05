@@ -1273,6 +1273,13 @@ namespace ClangSharp
                 return AddUsingDirectiveIfNeeded(_outputBuilder, remappedName, skipUsing);
             }
 
+            if (cursor is CXXConstructorDecl constructorDecl && !constructorDecl.HasBody)
+            {
+                wasRemapped = true;
+                remappedName = GetRemappedConstructorName(constructorDecl);
+                return AddUsingDirectiveIfNeeded(_outputBuilder, remappedName, skipUsing);
+            }
+
             wasRemapped = false;
             return AddUsingDirectiveIfNeeded(_outputBuilder, remappedName, skipUsing);
 
@@ -1375,6 +1382,30 @@ namespace ClangSharp
             {
                 var enumConstantDeclName = GetRemappedCursorName(enumConstantDecl);
                 return (enumConstantDeclName == $"{enumDeclName}_FORCE_DWORD") || (enumConstantDeclName == $"{enumDeclName}_FORCE_UINT");
+            }
+        }
+
+        private string GetRemappedConstructorName(CXXConstructorDecl constructorDecl)
+        {
+            // Copy- and move-constructors are remapped differently as they would remapped to the same signature
+            const string BaseName = "Constructor";
+
+            var parameterType = constructorDecl.Parameters.FirstOrDefault()?.Type;
+            if (constructorDecl.Parameters.Count != 1 || parameterType.PointeeType?.Desugar != constructorDecl.Parent.TypeForDecl)
+            {
+                return BaseName;
+            }
+            else if (parameterType.TypeClass == CX_TypeClass.CX_TypeClass_LValueReference)
+            {
+                return "Copy" + BaseName;
+            }
+            else if (parameterType.TypeClass == CX_TypeClass.CX_TypeClass_RValueReference)
+            {
+                return "Move" + BaseName;
+            }
+            else
+            {
+                return BaseName;
             }
         }
 
@@ -3376,7 +3407,13 @@ namespace ClangSharp
 
         private bool IsUnsafe(FunctionDecl functionDecl)
         {
-            if (IsUnsafe(functionDecl, functionDecl.ReturnType))
+            if (functionDecl.DeclContext is RecordDecl recordDecl && IsUnsafe(recordDecl))
+            {
+                return false; // no need to mark methods when the record is already unsafe
+            }
+
+            if (IsUnsafe(functionDecl, functionDecl.ReturnType) ||
+                (functionDecl is CXXMethodDecl methodDecl && NeedsThisParameter(methodDecl)))
             {
                 return true;
             }
@@ -3518,6 +3555,13 @@ namespace ClangSharp
             }
 
             return needsReturnFixup;
+        }
+
+        private bool NeedsThisParameter(CXXMethodDecl cxxMethodDecl)
+        {
+            Debug.Assert(cxxMethodDecl != null);
+            return cxxMethodDecl.IsVirtual ||
+                (!cxxMethodDecl.HasBody && cxxMethodDecl.IsInstance);
         }
 
         private static bool NeedsNewKeyword(string name)
