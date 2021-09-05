@@ -3726,7 +3726,7 @@ namespace ClangSharp
 
                 case "operator*":
                 {
-                    name = "Multiply";
+                    name = (numArgs == 1) ? "Dereference" : "Multiply";
                     return true;
                 }
 
@@ -3805,6 +3805,21 @@ namespace ClangSharp
                 case "operator>=":
                 {
                     name = "GreaterThanOrEquals";
+                    return true;
+                }
+
+                case "operator=":
+                {
+                    var sourceParameterIndex = functionDecl.IsInstance ? 0 : 1;
+                    name = numArgs > 1 && functionDecl.Parameters[sourceParameterIndex].Type.TypeClass == CX_TypeClass.CX_TypeClass_RValueReference
+                           ? "MoveFrom"
+                           : "CopyFrom";
+                    return true;
+                }
+
+                case "operator->":
+                {
+                    name = "Access";
                     return true;
                 }
 
